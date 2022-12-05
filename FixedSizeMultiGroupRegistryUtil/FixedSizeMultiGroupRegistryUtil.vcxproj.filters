@@ -21,9 +21,27 @@
     <ClCompile Include="fixed_size_multi_group_tracker.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\C++ array packing library\FixedSizeMultiGroupRegistryUtil\FixedSizeMultiGroupRegistryUtil\hiracical_group_paceked_data_tracker.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="fixed_size_multi_group_linked_list.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="template_fixed_size_multi_group_linked_list.ipp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="fixed_size_multi_group_tracker.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="fixed_size_multi_group_linked_list.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="template_fixed_size_multi_group_linked_list.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="template_fixed_size_multi_group_tracker.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

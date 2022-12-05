@@ -1,4 +1,6 @@
 #pragma once
+#include <cstdint>
+#include <limits>
 
 //template<typename TKey, typename TIndex>
 struct fixed_size_multi_group_tracker
@@ -51,7 +53,7 @@ public:
 	/// <returns></returns>
 	int size();
 
-	int group_count;
+	int group_count;	
 	int group_boundry_count;
 	int* group_boundries; //the start and end of each boundry
 	int* group_size; //the size of each group
