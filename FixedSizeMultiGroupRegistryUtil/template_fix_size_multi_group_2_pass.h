@@ -9,11 +9,13 @@ struct template_fixed_size_multi_group_2_pass
 private:
 
 	//does the end of this group have the least space and should the last elemeny be the one shuffeled to fill the hole
+	inline int pre_group_end_index(int group) const;
+	inline int group_start_index(int group) const;
+	inline int group_end_index(int group) const;
+	inline int post_group_start_index(int group) const;
+	inline int boundry_in_direction(int group, int direction) const;
 	inline int space_in_direction(int group, int direction) const;
 	inline bool should_remove_from_group_max(int group) const; 
-	inline int convert_key_to_lookup_index(TKey key) const;
-
-	void shuffle_data(int num_of_changes, int* in_remap_array);
 
 public:
 
@@ -34,8 +36,22 @@ public:
 	/// <param name="group"></param>
 	/// <param name="index"></param>
 	/// <returns></returns>
-	int get_key_at_group_index(int group, int index);
+	TKey get_key_at_group_index(int group, int index);
 
+	/// <summary>
+/// use this to loop through the data associated with a group
+/// </summary>
+/// <param name="group"></param>
+/// <param name="index"></param>
+/// <returns></returns>
+	TValue* get_value_at_group_index(int group, int index);
+
+
+	/// <summary>
+/// gets the total number of keys added to this tracker
+/// </summary>
+/// <returns></returns>
+	int size();
 
 	void remove(TKey key);
 
@@ -47,9 +63,11 @@ public:
 
 	int overlap_in_direction(int group, int direction) const;
 
-	int max_group_count; //maximum number of different groups
+	inline int convert_key_to_lookup_index(TKey key) const;
+
 	int group_count;
 	int group_boundry_count;
+
 	int* group_boundries; //the start and end of each boundry
 	int* group_size; //the size of each group
 
@@ -57,6 +75,7 @@ public:
 
 	int max_key_count;
 	int* group_of_key = 0; //what group a piece of data is in
+
 	int* index_of_key_in_grouped_keys = 0; //where data is located in the grouped array
 
 	struct node
@@ -66,10 +85,10 @@ public:
 
 		}
 
-		node(int _key, TValue* _data)
+		node(TKey _key, TValue* _data)
 		{
 			key = _key;
-			data = _data;
+			data = *_data;
 		}
 
 		TKey key;
@@ -111,22 +130,121 @@ inline int template_fixed_size_multi_group_2_pass<TKey, TValue>::convert_key_to_
 template<typename TKey, typename TValue>
 inline void template_fixed_size_multi_group_2_pass<TKey, TValue>::init(int _max_group_count, int _max_key_count)
 {
-	max_group_count = _max_group_count;
-	group_count = 0;
-	group_boundry_count = 0;
+	group_count = _max_group_count;
+	group_boundry_count = group_count * 2;
 
-	group_boundries = new int[(max_group_count * 2)];
-	group_size = new int[max_group_count];
+	group_boundries = new int[(group_boundry_count)];
+	group_size = new int[group_count];
 
 	max_key_count = _max_key_count;
 	group_of_key = new int[max_key_count];
-	temp_remap_array = new int[max_key_count];
+	temp_remap_array = new int[group_count];
 	index_of_key_in_grouped_keys = new int[max_key_count];
 	grouped_keys = new node[max_key_count];
 
 
 	initalise_group_boundries();
 }
+
+template<typename TKey, typename TValue>
+inline void template_fixed_size_multi_group_2_pass<TKey, TValue>::initalise_group_boundries()
+{
+	//space out the start and end points to create as much space between entries so as not to have to reshuffle the arrays much
+	int stride = max_key_count / (group_count + 1);
+
+	stride = stride ? stride : 1;
+
+
+	int sub_add = max_key_count - 1;
+
+	//some temp code to help with debugging
+	//this will stack up all group start and end points in the center of the array
+	stride = 0;
+	int middle_point = max_key_count / 2;
+	int middle_group = group_count / 2;
+	int centered_group_start = middle_point - (stride * middle_group);
+
+	//setup start and end of groups 
+	for (int i = 0; i < group_count; i++)
+	{
+		group_size[i] = 0;
+		group_boundries[group_start_index(i)] = (centered_group_start + (stride * i)) % max_key_count;
+		group_boundries[group_end_index(i)] = ((centered_group_start + (stride * i)) + sub_add) % max_key_count;
+	}
+}
+
+template<typename TKey, typename TValue>
+inline void template_fixed_size_multi_group_2_pass<TKey, TValue>::initalise_group_boundries_v2()
+{
+	//space out the start and end points to create as much space between entries so as not to have to reshuffle the arrays much
+	int stride = max_key_count / (group_count + 1);
+
+	stride = stride ? stride : 1;
+
+
+	int sub_add = max_key_count - 1;
+
+	int middle_point = max_key_count / 2;
+	int middle_group = group_count / 2;
+	int centered_group_start = middle_point - (stride * middle_group);
+
+	//setup start and end of groups 
+	for (int i = 0; i < group_count; i++)
+	{
+		group_size[i] = 0;
+		group_boundries[group_start_index(i)] = (stride * i) % max_key_count;
+		group_boundries[group_end_index(i)] = ((stride * i) + sub_add) % max_key_count;
+	}
+}
+
+template<typename TKey, typename TValue>
+inline void template_fixed_size_multi_group_2_pass<TKey, TValue>::clean_up()
+{
+	delete[] group_boundries;
+	delete[] group_size;
+	delete[] group_of_key;
+	delete[] index_of_key_in_grouped_keys;
+	delete[] grouped_keys;
+}
+
+template<typename TKey, typename TValue>
+inline void template_fixed_size_multi_group_2_pass<TKey, TValue>::clear()
+{
+	initalise_group_boundries();
+
+	for (int i = 0; i < max_key_count; i++)
+	{
+		group_of_key[i] = group_count;
+		index_of_key_in_grouped_keys[i] = max_key_count;
+	}
+}
+
+template<typename TKey, typename TValue>
+inline TKey template_fixed_size_multi_group_2_pass<TKey, TValue>::get_key_at_group_index(int group, int index)
+{
+	//get the start index for the group
+	int start_index = group_boundries[group * 2];
+
+	//wrap indexeing around for overflows 
+	int key_lookup_index = (start_index + index) % max_key_count;
+
+	//return the data at the index
+	return grouped_keys[key_lookup_index].key;
+}
+
+template<typename TKey, typename TValue>
+inline TValue* template_fixed_size_multi_group_2_pass<TKey, TValue>::get_value_at_group_index(int group, int index)
+{
+	//get the start index for the group
+	int start_index = group_boundries[group * 2];
+
+	//wrap indexeing around for overflows 
+	int key_lookup_index = (start_index + index) % max_key_count;
+
+	//return the data at the index
+	return &grouped_keys[key_lookup_index].data;
+}
+
 
 template<typename TKey, typename TValue>
 inline void template_fixed_size_multi_group_2_pass<TKey, TValue>::remove(TKey key)
@@ -172,86 +290,117 @@ inline void template_fixed_size_multi_group_2_pass<TKey, TValue>::add(int group,
 	//pick side of group to add item on
 	int direction = ((post_space >= pre_space) * 2) - 1;
 
+	//boundry index in direction
+	int boundry_index = boundry_in_direction(group, direction);
+
 	//get the next index for a group in a direction
-	int last_group_end_index = group_boundries[boundry_in_direction(group, direction)];
+	int last_group_end_index = group_boundries[boundry_index];
 	int index_to_add = (last_group_end_index + (max_key_count + direction)) % max_key_count;
 
+	//get the meta data lookup value for the key
 	int lookup_index = convert_key_to_lookup_index(key);
+
+	//expand the group boundries to include new item
+	group_boundries[boundry_index] = index_to_add;
 
 	int number_of_items_to_remap = 0;
 
-	//store what group the data is in 
+	//store the write address for the first element
+	temp_remap_array[number_of_items_to_remap] = index_to_add;
+
+	number_of_items_to_remap++;
+
+	//set key group as the group value gets changed later
 	group_of_key[lookup_index] = group;
-	index_of_key_in_grouped_keys[lookup_index] = index_to_add;
 
-	//get the existing item in that direction
-	node exising_value = grouped_keys[index_to_add];
-
-	//add to the size of the group
-	group_boundries[boundry_in_direction(group, direction)] = index_to_add;
-
-	value_in_limbo = exising_value;
-
-	//move to next group
-	group = (group + group_count + direction) % group_count;
-
+	//check if overlapping in direction
 	int address_in_use = overlap_in_direction(group, direction);
 
 	//check if add wil require shuffel
 	//dont loop back around on the original group
-	for (int i = 1; (i < group_count); i++)
+	for (int i = 1; (i < group_count) && address_in_use; i++)
 	{
-		//get the end index in the direction for the group
-		temp_remap_array[number_of_items_to_remap] = group_boundries[boundry_in_direction(group, direction)];
-
-		//check if this group is overlapping the next group
-		if (overlap_in_direction(group, direction) == 0)
-		{
-			//no overlap so safe to end remap process
-			break;
-		}
-
-		number_of_items_to_remap++;
-
-		//add "movement direction" to both start and end of next group
-		group_boundries[group * 2] = (group_boundries[group * 2] + max_key_count + direction) % max_key_count;
-		group_boundries[(group * 2) + 1] = (group_boundries[(group * 2) + 1] + max_key_count + direction) % max_key_count;
-
 		//move to next group
 		group = (group + group_count + direction) % group_count;
 
-		//if the held item is less than the end of the group swap it for the item one more than the group end 
-		index_to_add = (group_end_index + max_key_count + direction) % max_key_count;
+		//add "movement direction" to both start and end of group
+		group_boundries[group * 2] = (group_boundries[group * 2] + max_key_count + direction) % max_key_count;
+		group_boundries[(group * 2) + 1] = (group_boundries[(group * 2) + 1] + max_key_count + direction) % max_key_count;
 
-		node key_to_place = group_has_size ? value_in_limbo : grouped_keys[index_to_add];
+		//get next boundry
+		boundry_index = boundry_in_direction(group, direction);
 
-		exising_value = grouped_keys[index_to_add];
+		//get write to index
+		//get the next index for a group in a direction
+		index_to_add = group_boundries[boundry_index];
 
-		//insert the new key
-		grouped_keys[index_to_add] = key_to_place;
+		//if the end of a group is directly before the start then the group is empty 
+		//we know that index_to_add  is at the start of the group so we just need to check if 
+		//the end of the group is one less than the index_to_add  which we already calculated in 
+		//the previous loop in the line above
+		int group_has_size = temp_remap_array[number_of_items_to_remap -1] != index_to_add;
+
+		//add write too address to remap
+		temp_remap_array[number_of_items_to_remap] = index_to_add;
+
+		//increase number of items to remap but only if the group has size
+		number_of_items_to_remap += group_has_size;
+
+		//check if the current group overlaps the next group
+		address_in_use = overlap_in_direction(group, direction);
+	}
+
+	for (int i = number_of_items_to_remap -1; i > 0; i--)
+	{
+		node* node_to_copy = &grouped_keys[temp_remap_array[i -1]];
 
 		//update the placed keys index
-		lookup_index = convert_key_to_lookup_index(key_to_place.key);
+		int remap_lookup_index = convert_key_to_lookup_index(node_to_copy->key);
 
 		//update the keys index in grouped keys
-		index_of_key_in_grouped_keys[lookup_index] = index_to_add;
+		index_of_key_in_grouped_keys[remap_lookup_index] = temp_remap_array[i];
 
-		//update the key in limbo
-		value_in_limbo = group_has_size ? exising_value : value_in_limbo;
-
-
+		//copy to new location
+		grouped_keys[temp_remap_array[i]] = *node_to_copy;
 	}
 
-	for (int i = number_of_items_to_remap; i > 0; i--)
-	{
-		node* node_to_copy = grouped_keys[temp_remap_array[i]];
-	}
+	//update the keys index in grouped keys
+	index_of_key_in_grouped_keys[lookup_index] = temp_remap_array[0];
 
-	//insert the new key
-	grouped_keys[index_to_add] = node(key, data);
+	//copy data into location
+	grouped_keys[temp_remap_array[0]] = node(key, in_value);
 
 }
 
+template<typename TKey, typename TValue>
+inline int template_fixed_size_multi_group_2_pass<TKey, TValue>::pre_group_end_index(int group) const
+{
+	return ((group * 2) + (group_boundry_count - 1)) % group_boundry_count;
+}
+
+template<typename TKey, typename TValue>
+inline int template_fixed_size_multi_group_2_pass<TKey, TValue>::group_start_index(int group) const
+{
+	return (group * 2);
+}
+
+template<typename TKey, typename TValue>
+inline int template_fixed_size_multi_group_2_pass<TKey, TValue>::group_end_index(int group) const
+{
+	return (group * 2) + 1;
+}
+
+template<typename TKey, typename TValue>
+inline int template_fixed_size_multi_group_2_pass<TKey, TValue>::post_group_start_index(int group) const
+{
+	return  ((group * 2) + 2) % group_boundry_count;
+}
+
+template<typename TKey, typename TValue>
+inline int template_fixed_size_multi_group_2_pass<TKey, TValue>::boundry_in_direction(int group, int direction) const
+{
+	return  (group * 2) + (direction > 0);
+}
 
 template<typename TKey, typename TValue>
 inline int template_fixed_size_multi_group_2_pass<TKey, TValue>::pre_group_space(int group) const
@@ -263,7 +412,6 @@ inline int template_fixed_size_multi_group_2_pass<TKey, TValue>::pre_group_space
 	return bounded_diff;
 
 }
-
 
 template<typename TKey, typename TValue>
 inline int template_fixed_size_multi_group_2_pass<TKey, TValue>::post_group_space(int group) const
@@ -286,4 +434,17 @@ inline int template_fixed_size_multi_group_2_pass<TKey, TValue>::overlap_in_dire
 	return group_boundry_index == next_group_boundry_index;
 
 	//return  next_group_boundry_index == ((group_boundry_index + max_key_count + direction) % max_key_count);
+}
+
+
+template<typename TKey, typename TValue>
+inline int template_fixed_size_multi_group_2_pass<TKey, TValue>::size()
+{
+	int out_size = 0;
+	for (int i = 0; i < group_count; i++)
+	{
+		out_size += group_size[i];
+	}
+
+	return out_size;
 }

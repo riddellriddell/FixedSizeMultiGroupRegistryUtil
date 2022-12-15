@@ -109,7 +109,6 @@ void fixed_size_multi_group_linked_list::remove(int key)
 	internal_size--;
 }
 
-
 void fixed_size_multi_group_linked_list::clear()
 {
 	//correctly initalize the group start list

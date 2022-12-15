@@ -143,11 +143,13 @@
     <ClCompile Include="FixedSizeMultiGroupRegistryUtil.cpp" />
     <ClCompile Include="fixed_size_multi_group_linked_list.cpp" />
     <ClCompile Include="fixed_size_multi_group_tracker.cpp" />
+    <ClCompile Include="simple_multi_group_tracker.cpp" />
     <ClCompile Include="template_fixed_size_multi_group_linked_list.ipp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="fixed_size_multi_group_linked_list.h" />
     <ClInclude Include="fixed_size_multi_group_tracker.h" />
+    <ClInclude Include="simple_multi_group_tracker.h" />
     <ClInclude Include="template_fixed_size_multi_group_linked_list.h" />
     <ClInclude Include="template_fixed_size_multi_group_tracker.h" />
     <ClInclude Include="template_fix_size_multi_group_2_pass.h" />

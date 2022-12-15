@@ -73,7 +73,7 @@ public:
 		node(int _key, TValue* _data)
 		{
 			key = _key;
-			data = _data;
+			data = *_data;
 		}
 
 		int key;
@@ -432,7 +432,7 @@ void template_fixed_size_multi_group_tracker<TValue>::clear()
 		group_of_key[i] = group_count;
 		index_of_key_in_grouped_keys[i] = max_key_count;
 
-		TValue data = TValue();
+		TValue data = TValue(0);
 
 		grouped_keys[i] = node(max_key_count, &data);
 	}

@@ -30,6 +30,9 @@
     <ClCompile Include="template_fixed_size_multi_group_linked_list.ipp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="simple_multi_group_tracker.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="fixed_size_multi_group_tracker.h">
@@ -42,6 +45,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="template_fixed_size_multi_group_tracker.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="template_fix_size_multi_group_2_pass.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="simple_multi_group_tracker.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

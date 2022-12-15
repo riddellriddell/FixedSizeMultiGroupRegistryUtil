@@ -23,7 +23,7 @@ struct template_fixed_size_multi_group_linked_list
 	/// </summary>
 	/// <param name="out_node_index"></param>
 	/// <returns></returns>
-	bool get_first_value_in_group(int group, int* out_node_index, TValue* out_data);
+	void get_first_value_in_group(int group, int* out_node_index, TValue** out_data);
 
 	/// <summary>
 	/// use this to loop through the data associated with a group
@@ -33,7 +33,16 @@ struct template_fixed_size_multi_group_linked_list
 	/// <param name="group"></param>
 	/// <param name="index"></param>
 	/// <returns></returns>
-	bool get_next_value(int* in_out_node_index, TValue* out_data);
+	void get_next_value(int* in_out_node_index, TValue** out_data);
+
+	bool is_end_of_group(int index, int group) const;
+
+	/// <summary>
+	/// number of keys in a group
+	/// </summary>
+	/// <param name="group"></param>
+	/// <returns></returns>
+	int group_size(int group) const;
 
 	/// <summary>
 	/// gets the total number of keys added to this tracker
@@ -89,7 +98,7 @@ void template_fixed_size_multi_group_linked_list<TValue>::init(int _group_count,
 	//link up all the nodes
 	for (int i = 0; i < (_max_key_count + _group_count); i++)
 	{
-		nodes[i].data = TValue();
+		nodes[i].data = TValue(0);
 		nodes[i].next_node = i + 1;
 		nodes[i].last_node = i - 1;
 
@@ -184,7 +193,6 @@ void template_fixed_size_multi_group_linked_list<TValue>::clear()
 	//link up all the nodes
 	for (int i = 0; i < max_key_count + group_count; i++)
 	{
-		nodes[i].data = INVALID_KEY;
 		nodes[i].next_node = i + 1;
 		nodes[i].last_node = i - 1;
 
@@ -214,20 +222,43 @@ void template_fixed_size_multi_group_linked_list<TValue>::clear()
 }
 
 template<typename TValue>
-bool template_fixed_size_multi_group_linked_list<TValue>::get_first_value_in_group(int group, int* out_node_index, TValue* out_data)
+void template_fixed_size_multi_group_linked_list<TValue>::get_first_value_in_group(int group, int* out_node_index, TValue** out_data)
 {
 	*out_node_index = nodes[group_start[group]].next_node;
 
-	return nodes[*out_node_index].data;
+	*out_data = &nodes[*out_node_index].data;
 
 }
 
 template<typename TValue>
-bool template_fixed_size_multi_group_linked_list<TValue>::get_next_value(int* in_out_node_index, TValue* out_data)
+void template_fixed_size_multi_group_linked_list<TValue>::get_next_value(int* in_out_node_index, TValue** out_data)
 {
 	*in_out_node_index = nodes[*in_out_node_index].next_node;
 
-	out_data nodes[*in_out_node_index].data;
+	*out_data = &nodes[*in_out_node_index].data;
+}
+
+template<typename TValue>
+bool template_fixed_size_multi_group_linked_list<TValue>::is_end_of_group(int index, int group) const
+{
+	return index == group_start[group];
+}
+
+template<typename TValue>
+inline int template_fixed_size_multi_group_linked_list<TValue>::group_size(int group) const
+{
+	int output = 0;
+
+	auto node_index = nodes[group_start[group]].next_node;
+
+	while (!is_end_of_group(node_index, group))
+	{
+		output++;
+
+		node_index = nodes[node_index].next_node;
+	}
+
+	return output;
 }
 
 template<typename TValue>
