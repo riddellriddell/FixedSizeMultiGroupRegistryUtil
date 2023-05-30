@@ -6,6 +6,7 @@
 #include <vector>
 #include <cstdlib>
 #include <cassert>
+#include <atomic>
 #include "fixed_size_multi_group_tracker.h"
 #include "fixed_size_multi_group_linked_list.h"
 #include "template_fixed_size_multi_group_linked_list.h"
@@ -29,6 +30,7 @@ enum class test_candidates
 struct profiling_result
 {
 	long long total_profile_duration[(int)test_candidates::count] = {};
+	float average_profile_duration[(int)test_candidates::count] = {};
 
 	long long add_total_duration[ (int)test_candidates::count] = {};
 	float add_average_duration[(int)test_candidates::count] = {};
@@ -39,7 +41,6 @@ struct profiling_result
 	
 	long long read_total_duration[(int)test_candidates::count] = {};
 	float read_average_duration[(int)test_candidates::count] = {};
-
 
 	uint32 num_adds[(int)test_candidates::count] = {};
 	uint32 num_removes[(int)test_candidates::count] = {};
@@ -1113,7 +1114,11 @@ struct test_data
 
 void print_profile_result(profiling_result& prof_result, const uint32& iterations, const uint32& sub_itterations, const uint32& index)
 {
-	std::cout << "total:" << (prof_result.add_total_duration[index] + prof_result.remove_total_duration[index] + prof_result.read_total_duration[index]) << ", average : " << (prof_result.add_total_duration[index] + prof_result.remove_total_duration[index] + prof_result.read_total_duration[index]) / (iterations * (long long)sub_itterations) << "ns." << std::endl;
+
+	std::cout << "Test Total:" << (prof_result.total_profile_duration[index]) << ", average : " << (prof_result.average_profile_duration[index]) << "ns." << std::endl;
+
+
+	std::cout << "total per call:" << (prof_result.add_total_duration[index] + prof_result.remove_total_duration[index] + prof_result.read_total_duration[index]) << ", average : " << (prof_result.add_total_duration[index] + prof_result.remove_total_duration[index] + prof_result.read_total_duration[index]) / (iterations * (long long)sub_itterations) << "ns." << std::endl;
 
 	std::cout << "add count: " << prof_result.num_adds[index] << ", remove_count: " << prof_result.num_removes[index] << ", read count: " << prof_result.num_reads[index] << "add sum" << prof_result.sum_of_all_reads[index] << std::endl << std::endl;
 
@@ -1124,7 +1129,7 @@ void print_profile_result(profiling_result& prof_result, const uint32& iteration
 };
 
 
-template<typename TData>
+template<typename TData, bool TApplyMemoryFence>
 profiling_result test_template_performance(uint32 group_size, uint32 key_size, uint32 iterations, uint32 sub_itterations, uint32 seed, uint32 start_test_amount, uint32 dont_read_if_less_than_this_many_items_in_structure, uint32 percent_read_tests, uint32 force_add_to_existing_group_chane)
 {
 	profiling_result prof_result = {};
@@ -1203,6 +1208,9 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 
 			}
 
+			//get the start time for the test
+			auto start_total_prof = std::chrono::high_resolution_clock::now();
+
 			for (uint32 j = 0; j < sub_itterations; j++)
 			{
 				//pick which test to do
@@ -1219,7 +1227,11 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 
 					auto start_prof = std::chrono::high_resolution_clock::now();
 
+					if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
+
 					TData* next_data = simple_mixed_array_test->get_next_value_in_group(group, &read_index);
+
+					if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
 
 					auto end_prof = std::chrono::high_resolution_clock::now();
 
@@ -1231,7 +1243,11 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 
 						auto start_prof = std::chrono::high_resolution_clock::now();
 
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
+
 						next_data = simple_mixed_array_test->get_next_value_in_group(group, &read_index);
+
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
 
 						auto end_prof = std::chrono::high_resolution_clock::now();
 
@@ -1267,7 +1283,11 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 						//add to tracked structure
 						auto start_prof = std::chrono::high_resolution_clock::now();
 
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
+
 						simple_mixed_array_test->remove(key);
+
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
 
 						auto end_prof = std::chrono::high_resolution_clock::now();
 
@@ -1309,7 +1329,11 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 						//add to tracked structure
 						auto start_prof = std::chrono::high_resolution_clock::now();
 
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
+
 						simple_mixed_array_test->add(group, key, &data_to_add);
+
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
 
 						auto end_prof = std::chrono::high_resolution_clock::now();
 						
@@ -1325,6 +1349,9 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 					}
 				}
 			}
+
+			//get the total time for the test to run
+			prof_result.total_profile_duration[(int)test_candidates::simple_index] = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - start_total_prof).count();
 
 			std::cout << "Add remove Test:" << i << " complete\n";
 
@@ -1418,7 +1445,11 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 					{
 						auto start_prof = std::chrono::high_resolution_clock::now();
 
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
+
 						int key = template_packed_array_test->get_key_at_group_index(group, ik);
+
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
 
 						auto end_prof = std::chrono::high_resolution_clock::now();
 
@@ -1456,7 +1487,11 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 						//add to tracked structure
 						auto start_prof = std::chrono::high_resolution_clock::now();
 
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
+
 						template_packed_array_test->remove(key);
+
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
 
 						auto end_prof = std::chrono::high_resolution_clock::now();
 
@@ -1496,7 +1531,11 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 						//add to tracked structure
 						auto start_prof = std::chrono::high_resolution_clock::now();
 
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
+
 						template_packed_array_test->add(key, &data_to_add, group);
+
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
 
 						auto end_prof = std::chrono::high_resolution_clock::now();
 
@@ -1598,7 +1637,11 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 					{
 						auto start_prof = std::chrono::high_resolution_clock::now();
 
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
+
 						int key = template_packed_array_test->get_key_at_group_index(group, ik);
+
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
 
 						auto end_prof = std::chrono::high_resolution_clock::now();
 
@@ -1637,7 +1680,11 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 						//add to tracked structure
 						auto start_prof = std::chrono::high_resolution_clock::now();
 
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
+
 						template_packed_array_test->remove(key);
+
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
 
 						auto end_prof = std::chrono::high_resolution_clock::now();
 
@@ -1671,12 +1718,16 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 
 						prof_result.num_adds[(int)test_candidates::spaced_index]++;
 
+						auto data_to_add = TData(key);
+
 						//add to tracked structure
 						auto start_prof = std::chrono::high_resolution_clock::now();
 
-						auto data_to_add = TData(key);
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
 
 						template_packed_array_test->add(key, &data_to_add, group);
+
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
 
 						auto end_prof = std::chrono::high_resolution_clock::now();
 
@@ -1759,6 +1810,9 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 
 			}
 
+			//get the start time for the test
+			auto start_total_prof = std::chrono::high_resolution_clock::now();
+
 			for (uint32 j = 0; j < sub_itterations; j++)
 			{
 				//pick which test to do
@@ -1778,7 +1832,11 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 					//get the first entry in group
 					auto start_prof = std::chrono::high_resolution_clock::now();
 
+					if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
+
 					template_linked_list_test->get_first_value_in_group(group, &node_index, &data_for_key);
+
+					if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
 
 					auto end_prof = std::chrono::high_resolution_clock::now();
 
@@ -1792,7 +1850,11 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 					{
 						start_prof = std::chrono::high_resolution_clock::now();
 
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
+
 						template_linked_list_test->get_next_value(&node_index, &data_for_key);
+
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
 
 						end_prof = std::chrono::high_resolution_clock::now();
 
@@ -1832,7 +1894,11 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 						//add to tracked structure
 						auto start_prof = std::chrono::high_resolution_clock::now();
 
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
+
 						template_linked_list_test->remove(key);
+
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
 
 						auto end_prof = std::chrono::high_resolution_clock::now();
 
@@ -1866,12 +1932,16 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 
 						prof_result.num_adds[(int)test_candidates::linked_list_index]++;
 
+						auto data_to_add = TData(key);
+
 						//add to tracked structure
 						auto start_prof = std::chrono::high_resolution_clock::now();
 
-						auto data_to_add = TData(key);
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
 
 						template_linked_list_test->add(key, &data_to_add, group);
+
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
 
 						auto end_prof = std::chrono::high_resolution_clock::now();
 
@@ -1881,6 +1951,9 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 					}
 				}
 			}
+
+			//get the total time for the test to run
+			prof_result.total_profile_duration[(int)test_candidates::linked_list_index]	= std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - start_total_prof).count();
 
 			std::cout << "Add remove Test:" << i << " complete\n";
 
@@ -1897,6 +1970,8 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 			}
 
 		}
+
+		prof_result.average_profile_duration[(int)test_candidates::linked_list_index] = prof_result.total_profile_duration[(int)test_candidates::linked_list_index] / iterations;
 
 		prof_result.add_average_duration[(int)test_candidates::linked_list_index] = prof_result.add_total_duration[(int)test_candidates::linked_list_index] / prof_result.num_adds[(int)test_candidates::linked_list_index];
 		prof_result.remove_average_duration[(int)test_candidates::linked_list_index] = prof_result.remove_total_duration[(int)test_candidates::linked_list_index] / prof_result.num_removes[(int)test_candidates::linked_list_index];
@@ -1970,7 +2045,11 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 					{
 						auto start_prof = std::chrono::high_resolution_clock::now();
 
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
+
 						TData* data = template_packed_array_test_2_pass->get_value_at_group_index(group, ik);
+
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
 
 						auto end_prof = std::chrono::high_resolution_clock::now();
 
@@ -2008,7 +2087,11 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 						//add to tracked structure
 						auto start_prof = std::chrono::high_resolution_clock::now();
 
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
+
 						template_packed_array_test_2_pass->remove(key);
+
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
 
 						auto end_prof = std::chrono::high_resolution_clock::now();
 
@@ -2043,12 +2126,16 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 
 						prof_result.num_adds[(int)test_candidates::non_spaces_index_2_pass]++;
 
+						auto data_to_add = TData(key);
+
 						//add to tracked structure
 						auto start_prof = std::chrono::high_resolution_clock::now();
 
-						auto data_to_add = TData(key);
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
 
 						template_packed_array_test_2_pass->add(group, key, &data_to_add);
+
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
 
 						auto end_prof = std::chrono::high_resolution_clock::now();
 
@@ -2133,6 +2220,9 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 
 			}
 
+			//get the start time for the test
+			auto start_total_prof = std::chrono::high_resolution_clock::now();
+
 			for (uint32 j = 0; j < sub_itterations; j++)
 			{
 				//pick which test to do
@@ -2151,7 +2241,11 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 					{
 						auto start_prof = std::chrono::high_resolution_clock::now();
 
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
+
 						TData* data = template_packed_array_test_2_pass->get_value_at_group_index(group, ik);
+
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
 
 						auto end_prof = std::chrono::high_resolution_clock::now();
 
@@ -2190,7 +2284,11 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 						//add to tracked structure
 						auto start_prof = std::chrono::high_resolution_clock::now();
 
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
+
 						template_packed_array_test_2_pass->remove(key);
+
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
 
 						auto end_prof = std::chrono::high_resolution_clock::now();
 
@@ -2225,12 +2323,16 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 
 						prof_result.num_adds[(int)test_candidates::spaced_index_2_pass]++;
 
+						auto data_to_add = TData(key);
+
 						//add to tracked structure
 						auto start_prof = std::chrono::high_resolution_clock::now();
 
-						auto data_to_add = TData(key);
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
 
 						template_packed_array_test_2_pass->add(group, key, &data_to_add);
+
+						if constexpr (TApplyMemoryFence) { std::atomic_thread_fence(std::memory_order_seq_cst); }
 
 						auto end_prof = std::chrono::high_resolution_clock::now();
 
@@ -2240,6 +2342,10 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 					}
 				}
 			}
+
+			//get the total time for the test to run
+			prof_result.total_profile_duration[(int)test_candidates::spaced_index_2_pass] = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::high_resolution_clock::now() - start_total_prof).count();
+
 
 			std::cout << "Add remove Test:" << i << " complete\n";
 
@@ -2257,6 +2363,8 @@ profiling_result test_template_performance(uint32 group_size, uint32 key_size, u
 			}
 
 		}
+
+		prof_result.average_profile_duration[(int)test_candidates::spaced_index_2_pass] = prof_result.total_profile_duration[(int)test_candidates::spaced_index_2_pass] / iterations;
 
 		prof_result.add_average_duration[(int)test_candidates::spaced_index_2_pass] = prof_result.add_total_duration[(int)test_candidates::spaced_index_2_pass] / prof_result.num_adds[(int)test_candidates::spaced_index_2_pass];
 		prof_result.remove_average_duration[(int)test_candidates::spaced_index_2_pass] = prof_result.remove_total_duration[(int)test_candidates::spaced_index_2_pass] / prof_result.num_removes[(int)test_candidates::spaced_index_2_pass];
@@ -3194,17 +3302,31 @@ int main()
 
 		//run template test with only 4 bytes of data tracked per key
 		//this should give same performance as non templated code
-		prof_result[perf_index++] = test_template_performance<test_data<4>>		(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
-		prof_result[perf_index++] = test_template_performance<test_data<8>>		(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
-		prof_result[perf_index++] = test_template_performance<test_data<16>>	(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
-		prof_result[perf_index++] = test_template_performance<test_data<32>>	(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
-		prof_result[perf_index++] = test_template_performance<test_data<64>>	(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
-		prof_result[perf_index++] = test_template_performance<test_data<128>>	(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
-		prof_result[perf_index++] = test_template_performance<test_data<256>>	(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
-		prof_result[perf_index++] = test_template_performance<test_data<512>>	(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
-		prof_result[perf_index++] = test_template_performance<test_data<1024>>	(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
-		prof_result[perf_index++] = test_template_performance<test_data<2048>>	(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
-		prof_result[perf_index++] = test_template_performance<test_data<4096>>  (perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
+		//prof_result[perf_index++] = test_template_performance<test_data<4>,		false>	(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
+		//prof_result[perf_index++] = test_template_performance<test_data<8>,		false>	(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
+		//prof_result[perf_index++] = test_template_performance<test_data<16>,	false>	(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
+		//prof_result[perf_index++] = test_template_performance<test_data<32>,	false>	(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
+		//prof_result[perf_index++] = test_template_performance<test_data<64>,	false>	(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
+		//prof_result[perf_index++] = test_template_performance<test_data<128>,	false>	(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
+		prof_result[perf_index++] = test_template_performance<test_data<256>,	false>	(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
+		//prof_result[perf_index++] = test_template_performance<test_data<512>,	false>	(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
+		//prof_result[perf_index++] = test_template_performance<test_data<1024>,	false>	(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
+		//prof_result[perf_index++] = test_template_performance<test_data<2048>,	false>	(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
+		//prof_result[perf_index++] = test_template_performance<test_data<4096>,	false>  (perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
+
+		std::cout << "Running tests with memory fence";
+
+		//prof_result[perf_index++] = test_template_performance<test_data<4>,		true>(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
+		//prof_result[perf_index++] = test_template_performance<test_data<8>,		true>(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
+		//prof_result[perf_index++] = test_template_performance<test_data<16>,	true>(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
+		//prof_result[perf_index++] = test_template_performance<test_data<32>,	true>(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
+		//prof_result[perf_index++] = test_template_performance<test_data<64>,	true>(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
+		//prof_result[perf_index++] = test_template_performance<test_data<128>,	true>(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
+		prof_result[perf_index++] = test_template_performance<test_data<256>,	true>(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
+		//prof_result[perf_index++] = test_template_performance<test_data<512>,	true>(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
+		//prof_result[perf_index++] = test_template_performance<test_data<1024>,	true>(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
+		//prof_result[perf_index++] = test_template_performance<test_data<2048>,	true>(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
+		//prof_result[perf_index++] = test_template_performance<test_data<4096>,	true>(perf_test_group_size, perf_test_key_size, iterations, sub_itterations, 0, perf_test_key_size * 0.5f, perf_test_key_size * 0.25f, percent_of_read_actions, percent_of_adds_forced_into_existing_group);
 
 
 		
