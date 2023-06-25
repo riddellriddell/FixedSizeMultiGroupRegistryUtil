@@ -10,7 +10,7 @@ struct template_fixed_size_multi_group_linked_list
 	void init(int group_count, int max_key_count);
 	void clean_up();
 
-	void add(int key, TValue* data, int group);
+	void add(int group, int key, TValue* data);
 	void remove(int key);
 
 	/// <summary>
@@ -135,7 +135,7 @@ void template_fixed_size_multi_group_linked_list<TValue>::clean_up()
 }
 
 template<typename TValue>
-void template_fixed_size_multi_group_linked_list<TValue>::add(int key, TValue* _data, int group)
+void template_fixed_size_multi_group_linked_list<TValue>::add(int group, int key, TValue* _data)
 {
 	int node_index = free_node_start;
 
